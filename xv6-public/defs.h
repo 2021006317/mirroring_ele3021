@@ -186,5 +186,20 @@ void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
 
+//prac_syscall.c
+int		myfunction(char*);
+
+// queue.c
+struct          Node;
+struct          q;
+void            init_queue(struct q*);
+int             isEmpty(struct q*);
+void            push(struct q*, struct Node*);
+int             pop(struct q*);
+int             find_end(struct q*);
+int             find_front(struct q*);
+
+
+
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

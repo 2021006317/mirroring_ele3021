@@ -27,7 +27,7 @@ main(void)
   consoleinit();   // console hardware
   uartinit();      // serial port
   pinit();         // process table
-  tvinit();        // trap vectors
+  tvinit();        // trap vectors # trap.c
   binit();         // buffer cache
   fileinit();      // file table
   ideinit();       // disk 
