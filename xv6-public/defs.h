@@ -9,6 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct queue;
 
 // bio.c
 void            binit(void);
@@ -119,7 +120,8 @@ void            sleep(void*, struct spinlock*);
 void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
-void            yield(void);
+void            yield(void); //*
+void            boostPr(); //* priority boosting
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -187,19 +189,22 @@ int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
 
 //prac_syscall.c
-int		myfunction(char*);
+int		        myfunction(char*);
 
-// queue.c
-struct          Node;
-struct          q;
-void            init_queue(struct q*);
-int             isEmpty(struct q*);
-void            push(struct q*, struct Node*);
-int             pop(struct q*);
-int             find_end(struct q*);
-int             find_front(struct q*);
+//* syscalluser.c
+int getLevel(void);
+void setPriority(int, int);
+void schedulerLock(int);
+void schedulerUnlock(int);
+void cur_proc();
 
-
+//* queue.c
+void            init_queue(struct queue*, int);
+void            push(struct queue*, struct proc*);
+void            del(struct queue*, struct proc*);
+void            checkEmpty(struct queue*, int*);
+int             isThere(struct queue*, struct proc*);
+void            debugQ(struct queue*);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
