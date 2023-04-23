@@ -62,24 +62,10 @@ void schedulerLock(int password)
 void schedulerUnlock(int password)
 {
     me = myproc();
-    // struct cpu *c = mycpu();
 
     if (password == 2021006317){
         isUnlocked = 1;
         isLocked = 0;
-        
-        // switchuvm(p);
-        // p->state = RUNNABLE; //? 몰루게따~
-        // swtch(&(c->scheduler), p->context); // gt++
-        // switchkvm();
-        // p->lt++;
-
-        // if (isThere(&queueLzero, p)!=1) queueLzero.count++;
-        // struct proc* oldFront = queueLzero.front;
-        // queueLzero.front=p;
-        // p->next=oldFront;
-        // p->pr=3;
-        // p->lt=0;
     }
     else {
         cprintf("[Unlock failed] pid: %d, time quantum: %d, qLevel: %d\n",
@@ -102,7 +88,6 @@ int sys_setPriority(void)
     
     if ((argint(0, &pid) < 0)||argint(1,&priority)<0) return -1;
     setPriority(pid, priority);
-    cprintf("sys_setPriority\n");
     return 0;
 }
 
@@ -112,7 +97,6 @@ int sys_schedulerLock(void)
 
     if (argint(0, &pw) < 0) return -1;
     schedulerLock(pw);
-    cprintf("sys_schedulerLock\n");
     return 0;
     
 }
@@ -122,7 +106,6 @@ int sys_schedulerUnlock(void)
 
     if (argint(0, &pw) < 0) return -1;
     schedulerUnlock(pw);
-    cprintf("sys_schedulerUnlock\n");
     return 0;
 }
 

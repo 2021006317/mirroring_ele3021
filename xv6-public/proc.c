@@ -67,12 +67,12 @@ void boostPr(){
   acquire(&tickslock);
 
   for (struct proc* p = queueLone.front; p!=0; p=p->next){
-    cprintf("push Lone to Lzero: %d\n", p->pid);
+    cprintf("[boosting] push Lone to Lzero: %d\n", p->pid);
     del(&queueLone, p);
     pushLzero(p);
   }
   for (struct proc* p = queueLtwo.front; p!=0; p=p->next){
-    cprintf("push Ltwo to Lzero: %d\n", p->pid);
+    cprintf("[boosting] push Ltwo to Lzero: %d\n", p->pid);
     del(&queueLtwo, p);
     pushLzero(p);
   }
@@ -425,7 +425,7 @@ scheduler(void)
           queueLzero.front=q;
           q->next=oldFront;
           if (isUnlocked==1) {q->pr=3; q->lt=0; isUnlocked=0;}
-          else if (ticks==100) { q->lt=0; cprintf("100 ticks\n"); isLocked=0; boostPr();}
+          else if (ticks==100) { q->lt=0; cprintf("100 ticks\n"); isLocked=isUnlocked=0; boostPr();}
           break;
         }
       }
@@ -670,7 +670,7 @@ wakeup1(void *chan)
       p->state = RUNNABLE;
       if (isThere(&queueLzero, p)) {
         del(&queueLzero, p);
-        pushLzero(p);
+        push(&queueLzero, p);
       }
       else if (isThere(&queueLone, p)) {
         del(&queueLone, p);
