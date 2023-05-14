@@ -20,72 +20,10 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-extern uint ticks; // global tick
-extern struct spinlock tickslock;
-
-//* check if scheduler locked
-extern int isLocked; // lock called
-extern int isUnlocked; // unlock called
-struct proc* me; // current process
-
-//* queue declare
-struct queue queueLzero; // L0
-struct queue queueLone; // L1
-struct queue queueLtwo; // L2
-
-//* queue initialize
-void
-qinit(void) 
-{
-  init_queue(&queueLzero, 0);
-  init_queue(&queueLone, 1);
-  init_queue(&queueLtwo, 2);
-}
-
-//* initialize the proc info related to queue
-void
-pushLzero(struct proc* p)
-{
-  p->lt=0; // local tick (time quantum)
-  p->ql=0; // queue level
-  p->pr=3; // priority
-
-  // push to rear
-  p->next=(void*)0; 
-  push(&queueLzero, p);
-
-  // for debugging
-  // for (struct proc* p=queueLzero.front; p!=0; p=p->next){
-  //   cprintf("In L0, pid is %d\n", p->pid);
-  //   cprintf("L0 count: %d\n", queueLzero.count);
-  // }
-}
-
-//* priority boosting
-// ptable.lock 이 걸린 상태에서 이루어져야 함
-void boostPr(){
-  acquire(&tickslock);
-
-  for (struct proc* p = queueLone.front; p!=0; p=p->next){
-    cprintf("[boosting] push Lone to Lzero: %d\n", p->pid);
-    del(&queueLone, p);
-    pushLzero(p);
-  }
-  for (struct proc* p = queueLtwo.front; p!=0; p=p->next){
-    cprintf("[boosting] push Ltwo to Lzero: %d\n", p->pid);
-    del(&queueLtwo, p);
-    pushLzero(p);
-  }
-  ticks=0;
-  release(&tickslock);
-}
-
-
 void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
-  qinit();
 }
 
 // Must be called with interrupts disabled
@@ -140,10 +78,10 @@ allocproc(void)
 
   acquire(&ptable.lock);
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == UNUSED)
       goto found;
-  }
+
   release(&ptable.lock);
   return 0;
 
@@ -210,8 +148,7 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
 
-  p->state = RUNNABLE; //* userinit->RUNNABLE. exception 없음.
-  pushLzero(p);
+  p->state = RUNNABLE;
 
   release(&ptable.lock);
 }
@@ -221,7 +158,7 @@ userinit(void)
 int
 growproc(int n)
 {
-  uint sz; 
+  uint sz;
   struct proc *curproc = myproc();
 
   sz = curproc->sz;
@@ -277,8 +214,7 @@ fork(void)
 
   acquire(&ptable.lock);
 
-  np->state = RUNNABLE; //* RUNNABLE. exception 없음.
-  pushLzero(np);
+  np->state = RUNNABLE;
 
   release(&ptable.lock);
 
@@ -320,8 +256,8 @@ exit(void)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc){
       p->parent = initproc;
-      if(p->state == ZOMBIE){
-        wakeup1(initproc);}
+      if(p->state == ZOMBIE)
+        wakeup1(initproc);
     }
   }
 
@@ -376,7 +312,7 @@ wait(void)
 }
 
 //PAGEBREAK: 42
-//* Per-CPU process scheduler.
+// Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
 //  - choose a process to run
@@ -389,174 +325,33 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-
+  
   for(;;){
     // Enable interrupts on this processor.
     sti();
-    
+
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-
-    // //* deal with scheduler lock
-    // int broken=0;
-
-    if (isLocked==1){
-      struct proc* q = me;
-      while (isLocked==1){
-        if(q->state != RUNNABLE) {
-          isLocked = 0;
-          me = (void*)0;
-          break;
-        }
-
-        c->proc = q;
-        switchuvm(q);
-        q->state = RUNNING;
-        swtch(&(c->scheduler), q->context); // gt++
-        switchkvm();
-        q->lt++;
-        c->proc = 0;
-
-        // back to MLFQ
-        // cprintf("ticks %d\n", ticks);
-        if (ticks==100 || isUnlocked==1){ // isLocked=0
-          if (isThere(&queueLzero, q)!=1) queueLzero.count++;
-          struct proc* oldFront = queueLzero.front;
-          queueLzero.front=q;
-          q->next=oldFront;
-          if (isUnlocked==1) {q->pr=3; q->lt=0; isUnlocked=0;}
-          else if (ticks==100) { q->lt=0; cprintf("100 ticks\n"); isLocked=isUnlocked=0; boostPr();}
-          break;
-        }
-      }
-    }
-  
-    //* MLFQ
-
-    // 0이면 invalid, 1이면 valid (해당 큐에 proc 존재)
-    int validZero = 0; 
-    int validOne = 0;
-    int validTwo = 0;
-    
-    // if (broken==1) {acquire(&ptable.lock);}
-
-    checkEmpty(&queueLzero, &validZero);
-    checkEmpty(&queueLone, &validOne);
-    checkEmpty(&queueLtwo, &validTwo);
-    
-    //* L0
-    if(validZero){
-      p = queueLzero.front;
-      
-      if(p->state != RUNNABLE && p->state != RUNNING){
-        del(&queueLzero,p);
-        release(&ptable.lock);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
         continue;
-      }
 
-      // tq 다 안썼으면 L0선에서 처리
-      else if(queueLzero.tq > p->lt){
-        c->proc = p;
-        switchuvm(p);
-        p->state = RUNNING;
-        swtch(&(c->scheduler), p->context); // gt++
-        switchkvm();
-        p->lt++;
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
 
-        c->proc = 0;
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
 
-        // tq 다썼는지 확인하고 L1으로 내리기
-        if (queueLzero.tq == p->lt) { 
-          del(&queueLzero, p);
-          p->lt=0;
-          push(&queueLone,p);
-          p->ql++;
-        }
-      }
-      // priority boosting
-      if (ticks==100) boostPr();
-
-      release(&ptable.lock);
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
     }
+    release(&ptable.lock);
 
-      //* L1
-    else if(validOne){
-      p = queueLone.front;
-      if(p->state != RUNNABLE && p->state != RUNNING){
-        del(&queueLone,p);
-        release(&ptable.lock);
-        continue;
-      }
-
-      // tq 다 안썼으면 L1에서 처리
-      else if(queueLone.tq > p->lt){
-        c->proc = p;
-        switchuvm(p);
-        p->state = RUNNING;
-        swtch(&(c->scheduler), p->context); // gt++
-        switchkvm();
-        p->lt++;
-
-        c->proc = 0;
-
-        if (queueLone.tq == p->lt) {
-          del(&queueLone, p);
-          p->lt=0;
-          push(&queueLtwo,p);
-          p->ql++;
-        }
-      }
-
-      if (ticks==100) boostPr();
-      release(&ptable.lock);
-    }
-
-      //* L2: priority queue
-    else if(validTwo){
-      int isbreaked = 0;
-
-      // min (priority): 0~3
-      for (int min = 0; min <=3; min++){
-        for (p = queueLtwo.front; p!=0; p=p->next){
-          if(p->state != RUNNABLE && p->state != RUNNING){
-            del(&queueLtwo,p);
-          }
-
-          // find min priority
-          else if (p->pr == min){
-            if(queueLtwo.tq > p->lt){
-              c->proc = p;
-              switchuvm(p);
-              p->state = RUNNING;
-              swtch(&(c->scheduler), p->context);
-              switchkvm();
-              p->lt++;
-
-              c->proc = 0;
-
-              // tq 다썼는지 확인
-              if(queueLtwo.tq == p->lt){
-                p->lt = 0;
-                if (p->pr > 0) p->pr--;
-                else p->pr=0;
-              }
-              
-              isbreaked=1;
-              break;
-            }
-          }
-        }
-        if (isbreaked==1) break;
-      }
-      if (ticks==100) boostPr();
-      release(&ptable.lock);
-    }
-
-    //* L0, L1, L2 말고...
-    else {
-      if (ticks==100) boostPr();
-      release(&ptable.lock);
-    }
   }
 }
 
@@ -570,7 +365,6 @@ scheduler(void)
 void
 sched(void)
 {
-  // cprintf("sched\n");
   int intena;
   struct proc *p = myproc();
 
@@ -588,10 +382,9 @@ sched(void)
 }
 
 // Give up the CPU for one scheduling round.
-//* timer interrupt 발생했을 때 호출된다. running -> runnable.
 void
 yield(void)
-{ 
+{
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
   sched();
@@ -625,7 +418,7 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-
+  
   if(p == 0)
     panic("sleep");
 
@@ -665,24 +458,10 @@ static void
 wakeup1(void *chan)
 {
   struct proc *p;
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->state == SLEEPING && p->chan == chan){
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if(p->state == SLEEPING && p->chan == chan)
       p->state = RUNNABLE;
-      if (isThere(&queueLzero, p)) {
-        del(&queueLzero, p);
-        push(&queueLzero, p);
-      }
-      else if (isThere(&queueLone, p)) {
-        del(&queueLone, p);
-        push(&queueLone, p);
-      }
-      else if (isThere(&queueLtwo, p)) {
-        del(&queueLone, p);
-        push(&queueLtwo, p);
-      }
-      else { pushLzero(p); }
-    }
-  }
 }
 
 // Wake up all processes sleeping on chan.
@@ -707,9 +486,8 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING){
+      if(p->state == SLEEPING)
         p->state = RUNNABLE;
-      }
       release(&ptable.lock);
       return 0;
     }
