@@ -66,23 +66,31 @@ exec2(char *path, char **argv, int stacksize)
   iunlockput(ip);
   end_op();
   ip = 0;
-
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible. //* 이게 가드용페이지 인거 같지?
   // Use the second as the user stack. //* 이게 스택용페이지.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + stacksize*PGSIZE)) == 0)
+  if((sz = allocuvm(pgdir, sz, sz + (stacksize+1)*PGSIZE)) == 0)
     goto bad;
-  clearpteu(pgdir, (char*)(sz - stacksize*PGSIZE));
+  clearpteu(pgdir, (char*)(sz - (stacksize+1)*PGSIZE));
   sp = sz;
 
+  int argcc;
+  cprintf("argv 배열의 크기: %d\n", sizeof(argv));
+
+  for (argcc = 0; argv[argcc] != 0; argcc++) {
+      cprintf("argv[%d]: %s\n", argcc, argv[argcc]);
+  }
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
-    if(argc >= MAXARG)
+    if(argc >= MAXARG){
       goto bad;
-    sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
-    if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
+    }
+    sp = (sp - (strlen(argv[argc]) + 1)) & ~3; //! 여기서 argc=11일때 trap 걸림.
+    int co = copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1);
+    if(co < 0){
       goto bad;
+    }
     ustack[3+argc] = sp;
   }
   ustack[3+argc] = 0;
@@ -112,6 +120,7 @@ exec2(char *path, char **argv, int stacksize)
   return 0;
 
  bad:
+  cprintf("bad\n");
   if(pgdir)
     freevm(pgdir);
   if(ip){

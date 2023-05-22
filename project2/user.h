@@ -42,3 +42,8 @@ int atoi(const char*);
 int exec2(char *path, char **argv, int stacksize);
 int setmemorylimit(int, int);
 void list(void);
+
+// pthread.c
+int thread_create(thread_t*, void*(*start_routine)(void*), void*);
+void thread_exit(void*);
+int thread_join(thread_t, void **);

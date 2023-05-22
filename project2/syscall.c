@@ -108,6 +108,9 @@ extern int sys_mykill(void);
 extern int sys_execute(void);
 extern int memlim(void);
 extern int sys_myexit(void);
+extern int sys_thread_create(void);
+extern int sys_thread_exit(void);
+extern int sys_thread_join(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -137,6 +140,10 @@ static int (*syscalls[])(void) = {
 [SYS_exec2] sys_execute,
 [SYS_setmemorylimit] memlim,
 [SYS_myexit]  sys_myexit,
+// pthread
+[SYS_thread_create] sys_thread_create,
+[SYS_thread_exit] sys_thread_exit,
+[SYS_thread_join] sys_thread_join,
 };
 
 void

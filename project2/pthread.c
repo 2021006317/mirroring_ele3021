@@ -30,7 +30,6 @@ int thread_create(thread_t *thread, void*(*start_routine)(void*), void* arg){
     child->tid = thread;
     child->start_routine = start_routine;
 
-
     return 0;
     //! return -1 하는 경우는 뭐가 있을까?
 }

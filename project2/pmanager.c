@@ -117,6 +117,8 @@ int main(int argc, char* argv[]){
                 path = tokens[1];
                 char* argv[] = { path, 0 };
                 stacksize = atoi(tokens[2]);
+                printf(1, "%s\n", argv[0]);
+                printf(1, "%s\n", argv[1]);
                 if(validate_num(stacksize) && validate_path(path)) exec2(path, argv, stacksize);
                 break;
         // memlim <pid> <limit>
