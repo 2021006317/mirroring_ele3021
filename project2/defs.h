@@ -186,5 +186,10 @@ void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
 
+// procmng.c
+int             exec2(char*, char**, int);
+int             setmemomrylimit(int, int);
+void            list(void);
+
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

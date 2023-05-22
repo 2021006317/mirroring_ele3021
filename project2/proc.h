@@ -39,8 +39,8 @@ struct proc {
   uint sz;                     // Size of process memory (bytes)
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
-  enum procstate state;        // Process state
-  int pid;                     // Process ID
+  enum procstate state;        //* Process state
+  int pid;                     //* Process ID
   struct proc *parent;         // Parent process
   struct trapframe *tf;        // Trap frame for current syscall
   struct context *context;     // swtch() here to run process
@@ -48,7 +48,14 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
-  char name[16];               // Process name (debugging)
+  char name[16];               //* Process name (debugging)
+  int stacksize;               //* 스택용 페이지의 개수
+  int memlim;                  //* memory limit. 0이면 unlimited, 양수면 limited.
+
+  int isThread;                //* LWP면 1, 아니면 0
+  thread_t* tid;               //* thread ID 근데 왜 포인터일까?
+  struct proc* nextlwp;        //* next LWP
+  void*(*start_routine)(void*);//* 실행시킬 함수
 };
 
 // Process memory is laid out contiguously, low addresses first:

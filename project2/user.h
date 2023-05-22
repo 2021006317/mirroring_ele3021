@@ -37,3 +37,8 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+
+// procmng.c
+int exec2(char *path, char **argv, int stacksize);
+int setmemorylimit(int, int);
+void list(void);

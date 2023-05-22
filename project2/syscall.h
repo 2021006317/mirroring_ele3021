@@ -20,3 +20,9 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
+#define SYS_list   22
+#define SYS_exec2 23
+#define SYS_setmemorylimit 24
+#define SYS_mykill 25
+#define SYS_myexit 26
+// pmanager: 22, 23, 24, 25, 26
