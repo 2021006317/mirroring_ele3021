@@ -104,10 +104,8 @@ extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_list(void);
-extern int sys_mykill(void);
-extern int sys_execute(void);
+extern int sys_exec2(void);
 extern int memlim(void);
-extern int sys_myexit(void);
 extern int sys_thread_create(void);
 extern int sys_thread_exit(void);
 extern int sys_thread_join(void);
@@ -134,12 +132,10 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
-// pmanager(procmng)
+// pmanager (procmng)
 [SYS_list]    sys_list,
-[SYS_mykill]  sys_mykill,
-[SYS_exec2] sys_execute,
+[SYS_exec2] sys_exec2,
 [SYS_setmemorylimit] memlim,
-[SYS_myexit]  sys_myexit,
 // pthread
 [SYS_thread_create] sys_thread_create,
 [SYS_thread_exit] sys_thread_exit,

@@ -14,6 +14,17 @@ extern struct {
   struct proc proc[NPROC];
 } ptable;
 
+//* find process with pid
+struct proc*
+find_proc(int pid)
+{
+    struct proc* p;
+    for(p = ptable.proc; p<&ptable.proc[NPROC]; p++){
+        if (p->pid == pid){ return p; }
+    }
+    return p;
+}
+
 int
 exec2(char *path, char **argv, int stacksize)
 {
@@ -30,7 +41,7 @@ exec2(char *path, char **argv, int stacksize)
 
   if((ip = namei(path)) == 0){
     end_op();
-    cprintf("exec: fail\n");
+    cprintf("exec2: fail\n");
     return -1;
   }
   ilock(ip);
@@ -66,31 +77,24 @@ exec2(char *path, char **argv, int stacksize)
   iunlockput(ip);
   end_op();
   ip = 0;
-  // Allocate two pages at the next page boundary.
-  // Make the first inaccessible. //* 이게 가드용페이지 인거 같지?
-  // Use the second as the user stack. //* 이게 스택용페이지.
+
+  // Allocate n pages at the next page boundary.
+  // Make the first inaccessible. Use the (n-1) as the user stacks.
+  // n = stacksize+1
+  curproc->stacksize = stacksize;
   sz = PGROUNDUP(sz);
   if((sz = allocuvm(pgdir, sz, sz + (stacksize+1)*PGSIZE)) == 0)
     goto bad;
   clearpteu(pgdir, (char*)(sz - (stacksize+1)*PGSIZE));
   sp = sz;
-
-  int argcc;
-  cprintf("argv 배열의 크기: %d\n", sizeof(argv));
-
-  for (argcc = 0; argv[argcc] != 0; argcc++) {
-      cprintf("argv[%d]: %s\n", argcc, argv[argcc]);
-  }
+  cprintf("custom stacksize: %d\n", curproc->stacksize);
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
-    if(argc >= MAXARG){
+    if(argc >= MAXARG)
       goto bad;
-    }
-    sp = (sp - (strlen(argv[argc]) + 1)) & ~3; //! 여기서 argc=11일때 trap 걸림.
-    int co = copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1);
-    if(co < 0){
+    sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
+    if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
       goto bad;
-    }
     ustack[3+argc] = sp;
   }
   ustack[3+argc] = 0;
@@ -120,7 +124,6 @@ exec2(char *path, char **argv, int stacksize)
   return 0;
 
  bad:
-  cprintf("bad\n");
   if(pgdir)
     freevm(pgdir);
   if(ip){
@@ -138,19 +141,11 @@ setmemorylimit(int pid, int limit)
         cprintf("limit cannot be negative\n");
         return -1;
     }
-    struct proc* p;
-    int check = 0;
-    acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if (p->pid == pid){
-            check = 1;
-            break;
-        }
-    }
+    struct proc* p = find_proc(pid);
     // error 2. 일치하는 pid 가 없는 경우
-    if (!check){
-        cprintf("pid unmatched\n");
-        return -1;
+    if (p->pid != pid){
+      cprintf("error : find_proc fail\n");
+      return -1;
     }
     // error 3. 기존 할당받은 메모리보다 limit이 작은 경우
     if (limit < p->memlim){ //! memlim 이 아니라 sz 로 봐야 하나?
@@ -163,26 +158,38 @@ setmemorylimit(int pid, int limit)
     return 0;
 }
 
-///////////////////////////////////////////////////////////////////////////
-//* find process with pid
-struct proc*
-find_proc(int pid)
-{
-    struct proc* p;
-    for(p = ptable.proc; p<&ptable.proc[NPROC]; p++){
-        if (p->pid == pid){ return p; }
-    }
-    cprintf("cannot find proc\n");
-    return p;
+//* for debugging: print process' state
+void printstate(struct proc* p){
+  switch(p->state){
+    case RUNNABLE:
+      cprintf("RUNNABLE\n");
+      break;
+    case RUNNING:
+      cprintf("RUNNING\n");
+      break;
+    case EMBRYO:
+      cprintf("EMBRYO\n");
+      break;
+    case ZOMBIE:
+      cprintf("ZOMBIE\n");
+      break;
+    case UNUSED:
+      cprintf("UNUSED\n");
+      break;  
+    case SLEEPING:
+      cprintf("SLEEPING\n");
+      break;
+  }
 }
 
 //* pmanager kernel func : list
 void list(void){
   int cnt = 0;
   for(struct proc* p = ptable.proc; p<&ptable.proc[NPROC]; p++){
-    if ((p->isThread == 0) && (p->state == RUNNING)){ //! thread 인 경우를 고려해주어야 한다.
+    if ((p->isThread == 0)&&((p->state == RUNNABLE)||p->state == RUNNING)){
       cnt++;
-      cprintf("RUNNNING process[%d]:\n", cnt);
+      cprintf("process[%d] state: ", cnt);
+      printstate(p);
       cprintf("name: %s, pid: %d, stack_page: %d, mem_size: %d, mem_limit: %d\n",
               p->name, p->pid, p->stacksize, p->sz, p->memlim);
     }
@@ -195,66 +202,55 @@ int sys_list(void){
   return 0;
 }
 
-//* pmanager wrapper : kill.. 
-int sys_mykill(void){
-  int pid;
-  int res = argint(0,&pid);
+//* pmanager wrapper : execute
+int sys_exec2(void){
+  char* path;
+  int stacksize;
+  char** argv;
+  int res = argstr(0, &path);
   if (res==-1){
-      panic("error: related to pid of kill\n");
-  }
-  kill(pid);
-  struct proc* p = find_proc(pid);
-  if (p->killed!=0){
-      cprintf("kill successs\n");
-      return 0;
-  } else{
-      cprintf("kill failed\n");
+      cprintf("error: related to path of execute\n");
       return -1;
   }
+  int res2 = argptr(1, (void*)&argv, sizeof(argv));
+  if (res2==-1){
+      cprintf("error: related to argv of execute\n");
+      return -1;
+  }
+  int res3 = argint(2, &stacksize);
+  if (res3==-1){
+      cprintf("error: related to stacksize of execute\n");
+      return -1;
+  }
+
+  exec2(path, argv, stacksize);
+  return 0;
 }
 
-//* pmanager wrapper : execute
-int sys_execute(void){
-    char* path;
-    int stacksize;
-    int res = argstr(0, &path);
-    if (res==-1){
-        panic("error: related to path of execute\n");
-    }
-    int res2 = argint(0,&stacksize);
-    if (res2==-1){
-        panic("error: related to stacksize of execute\n");
-    }
-    exec2(path, &path, stacksize); //! argv..?
-    return 0;
-}
-
-//* pmanager wrapper : memlim (setmemorylimit)
+//* pmanager wrapper : memlim (== sys_setmemorylimit)
 int memlim(void){
     int pid, limit;
     int res = argint(0, &pid);
     if (res==-1){
-        panic("error: related to pid of memlim\n");
+        cprintf("error: related to pid of memlim\n");
+        return -1;
     }
     int res2 = argint(1, &limit);
     if (res2==-1){
-        panic("error: related to limit of memlim\n");
+        cprintf("error: related to limit of memlim\n");
+        return -1;
     }
 
     int sml = setmemorylimit(pid, limit);
 
     struct proc* p = find_proc(pid);
-    if((p->memlim == limit) && (sml==1)){
+    // sml 만 확인해도 되지만, 혹시 모르니까?
+    if((p->memlim == limit) && (sml==0)){
         cprintf("memlim success\n");
         return 0;
     } else {
         cprintf("memlim failed\n");
+        cprintf("sml: %d, p.memlim: %d, limit: %d\n", sml, p->memlim, limit);
         return -1;
     }
-}
-
-//* pmanager wrapper : exit
-int sys_myexit(void){
-    exit();
-    return 0;
 }

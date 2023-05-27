@@ -12,7 +12,7 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
-static struct proc *initproc;
+struct proc *initproc;
 
 int nextpid = 1;
 extern void forkret(void);
@@ -88,6 +88,8 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->stacksize = 1; //* set stacksize (스택용 페이지 수)
+  p->memlim = 0; //* memory limit
 
   release(&ptable.lock);
 
@@ -139,6 +141,9 @@ userinit(void)
   p->tf->esp = PGSIZE;
   p->tf->eip = 0;  // beginning of initcode.S
 
+  p->isThread = 0;
+  p->tid = 0;
+  
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
@@ -177,6 +182,7 @@ growproc(int n)
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
+//* if process is LWP, treat it asif it is a process.
 int
 fork(void)
 {
@@ -190,7 +196,8 @@ fork(void)
   }
 
   // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+  np->pgdir = copyuvm(curproc->pgdir, curproc->sz); //! 에러 발생?
+  if((np->pgdir) == 0){
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
@@ -199,6 +206,9 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+
+  np->isThread = 0; //* 메인스레드(프로세스)는 isThread=0
+  np->tid = 0;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -473,6 +483,33 @@ wakeup(void *chan)
   release(&ptable.lock);
 }
 
+//* kill all the related threads.
+// ptable lock이 걸린 상태에서 호출되어야 한다.
+// 하나  이상의  스레드가  kill 되면  프로세스  내의  모든  스레드가  종료되어야  합니다.
+// kill 및  종료된  스레드의  자원들은  모두  정리되고  회수되어야  합니다.
+void kill_thread(struct proc* p){
+  // 1. isThread==0 : 자식스레드를 찾아 종료, 정리
+  if (p->isThread==0){
+    for (struct proc* child = ptable.proc; child<&ptable.proc[NPROC]; child++){
+      if ((child->parent == p)&&(child->isThread==1)){
+        kill(child->pid);
+        recovery(child);
+      }
+    }
+  }
+  // 2. isThread==1 : 내가 아닌 형제(자기 부모의 다른 자식)스레드를 찾아 종료, 정리. 부모도 종료, 정리.
+  else if(p->isThread==1){
+    for (struct proc* child = ptable.proc; child<&ptable.proc[NPROC]; child++){
+      if((child->parent == p->parent)&&(child->isThread==1)&&(child->tid!=p->tid)){
+        kill(child->pid);
+        recovery(child);
+      }
+    }
+    kill(p->parent->pid);
+    recovery(p->parent);
+  }
+}
+
 // Kill the process with the given pid.
 // Process won't exit until it returns
 // to user space (see trap in trap.c).
@@ -484,7 +521,9 @@ kill(int pid)
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
+      
       p->killed = 1;
+      kill_thread(p);
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
         p->state = RUNNABLE;

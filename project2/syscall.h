@@ -18,15 +18,13 @@
 #define SYS_mknod  17
 #define SYS_unlink 18
 #define SYS_link   19
-#define SYS_mkdir  20
+#define SYS_mkdir  20   
 #define SYS_close  21
 // pmanager
 #define SYS_list   22
 #define SYS_exec2 23
 #define SYS_setmemorylimit 24
-#define SYS_mykill 25
-#define SYS_myexit 26
 // pthread
-#define SYS_thread_create 27
-#define SYS_thread_exit 28
-#define SYS_thread_join 29
+#define SYS_thread_create 25
+#define SYS_thread_exit 26
+#define SYS_thread_join 27

@@ -53,9 +53,8 @@ struct proc {
   int memlim;                  //* memory limit. 0이면 unlimited, 양수면 limited.
 
   int isThread;                //* LWP면 1, 아니면 0
-  thread_t* tid;               //* thread ID 근데 왜 포인터일까?
-  struct proc* nextlwp;        //* next LWP
-  void*(*start_routine)(void*);//* 실행시킬 함수
+  thread_t tid;                //* thread ID
+  void* retval;                //* thread_exit, join 에서 쓸 값
 };
 
 // Process memory is laid out contiguously, low addresses first:

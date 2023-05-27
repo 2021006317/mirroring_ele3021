@@ -18,3 +18,4 @@
 #define MYEXEC      3
 #define MYMEMLIM    4
 #define MYEXIT      5
+#define INVALID     6

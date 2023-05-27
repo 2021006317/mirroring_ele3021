@@ -33,7 +33,20 @@ sys_kill(void)
 
   if(argint(0, &pid) < 0)
     return -1;
-  return kill(pid);
+  struct proc* p = find_proc(pid);
+  if (p->pid != pid){
+    cprintf("error : find process fail\n");
+    return -1;
+  }
+  kill(pid);
+  //* kill 성공 여부 출력
+  if (p->killed!=0){
+      cprintf("kill success\n");
+      return 0;
+  } else{
+      cprintf("kill failed\n");
+      return -1;
+  }
 }
 
 int

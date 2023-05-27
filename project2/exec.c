@@ -6,6 +6,35 @@
 #include "defs.h"
 #include "x86.h"
 #include "elf.h"
+#include "spinlock.h"
+
+extern struct {
+  struct spinlock lock;
+  struct proc proc[NPROC];
+} ptable;
+
+//* recover all resource of the related threads.
+// ptable이 걸린 채로 호출되어야 한다.
+// exec가  실행되면  기존  프로세스의  모든  스레드들이  정리되어야  합니다.
+// 하나의  스레드에서  새로운  프로세스가  시작하고  나머지  스레드는  종료되어야  합니다.
+void recover_thread(struct proc* me){
+  // 1. isThread==0 : 자식스레드를 찾아 종료, 정리
+  if (me->isThread==0){
+    for (struct proc* p = ptable.proc; p<&ptable.proc[NPROC]; p++){
+      if ((p->parent == me)&&(p->isThread==1)){
+        recovery(p);
+      }
+    }
+  }
+  // 2. isThread==1 : 자기 부모의, 내가 아닌 다른 자식스레드를 찾아 종료, 정리
+  else if(me->isThread==1){
+    for (struct proc* p = ptable.proc; p<&ptable.proc[NPROC]; p++){
+      if((p->parent == me->parent)&&(p->isThread==1)&&(p->tid!=me->tid)){
+        recovery(p);
+      }
+    }
+  }
+}
 
 int
 exec(char *path, char **argv)
@@ -37,6 +66,11 @@ exec(char *path, char **argv)
 
   if((pgdir = setupkvm()) == 0)
     goto bad;
+
+  //* recover all child-threads.
+  acquire(&ptable.lock);
+  recover_thread(curproc);
+  release(&ptable.lock);
 
   // Load program into memory.
   sz = 0;

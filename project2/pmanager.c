@@ -11,19 +11,18 @@ parsemytoken(char* buf, char** tokens, int maxTokens) {
     int start = 0;
     
     while (buf[i] != '\0') {
-        // 공백 문자를 기준으로 파싱
-        if (buf[i] == ' ') {
-            buf[i] = '\0';  // 파싱된 토큰의 끝을 표시
+        if ((buf[i] == ' ')) {
+            buf[i] = '\0';
             if (tokenCount < maxTokens) {
-                tokens[tokenCount] = &buf[start];  // 파싱된 토큰 저장
+                tokens[tokenCount] = &buf[start];
                 tokenCount++;
             }
-            start = i + 1;  // 다음 토큰의 시작 위치
+            start = i + 1;
         }
         i++;
     }
     if (tokenCount < maxTokens) {
-        tokens[tokenCount] = &buf[start];  // 마지막 토큰 저장
+        tokens[tokenCount] = &buf[start];
     }
 }
 
@@ -50,12 +49,30 @@ parsemycmd(char* buf)
     else if ((command[0] == 'e')&&(command[1]=='x')&&(command[2]=='i')&&(command[3]=='t')){
         return MYEXIT;
     }
-    else{
+    else if (sizeof(command)==0){
         return NOCMD;
+    }
+    else {
+        return INVALID;
     }
 }
 
-//* user func : validate for path, becuase it should be composed of alphabets and numbers. 
+//* 에러 걸린 경우 출력하고 종료시킬 때
+// 1. 토큰이 필요 이상으로 많은 경우
+// 2. 토큰 validate = -1 인 경우
+void errorexit(int err, char* name){
+    if (err==1){
+        printf(1, "error: wrong token with %s\n", name);
+        exit();
+    }
+    else if (err==2){
+        printf(1, "error: invalid token with %s\n", name);
+        exit();
+    }
+}
+
+//* user func : validate for path, because it should be composed of alphabets and numbers.
+// 1이면 정상, -1이면 오류 
 int
 validate_path(char *path)
 { 
@@ -65,82 +82,101 @@ validate_path(char *path)
             valid++;
         }
     }
-    if (valid == strlen(path)){ return 1; }
-    else return 0;
+    if (valid == strlen(path))  return 1;
+    else                        return -1;
 }
 
-//* user func : validate for pid and stacksize, because it has own bound : 0 이상 10억 이하
+//* user func : validate for pid, limit and stacksize
+// 1. is it int?
+// 2. is it in its own bound? ( 0 이상 10억 이하 )
+// 정상이면 num, 아니면 -1
 int
-validate_num(int n)
+validate_num(char* txt)
 {
-    if (n<0 || n > 100000000){
-        return 0;
+    for (char* c = txt; c<&txt[strlen(txt)]; c++){
+        if (!(*c >= '0' && *c <= '9') && (*c != 10)) return -1;
     }
-    return 1;
+    return atoi(txt);
 }
 
 //* user func : main
-int main(int argc, char* argv[]){
+int
+main(int argc, char* argv[])
+{
+    while(1) {
+        static char buf[100];
+        int pid, limit, stacksize, command;
+        char* path;
 
-    if (!strcmp(argv[0],"pmanager")){
-        while(1){
-            static char buf[100];
-            int pid, limit, stacksize, command;
-            char* path;
+        printf(2, "> ");
+        memset(buf, 0, sizeof(buf));
+        gets(buf, sizeof(buf));
+        
+        char* tokens[4]={0,};
+        parsemytoken(buf, tokens, 4);
+        command = parsemycmd(buf);
+
+        switch(command){
+        case NOCMD:
+            printf(1, "error : need command\n");
+            break;
+    
+        case MYLIST: // list
+            if (tokens[1]!=0)   errorexit(1, "list");
+
+            list();
+            break;
+    
+        case MYKILL: // kill <pid>
+            if (tokens[2]!=0)   errorexit(1, "kill");
+
+            pid = validate_num(tokens[1]);
+            if (pid==-1)        errorexit(2, "kill");
             
-            printf(2, "> ");
-            memset(buf, 0, sizeof(buf));
-            gets(buf, sizeof(buf));
-            char* tokens[4];
+            kill(pid);
+            break;
+    
+        case MYEXEC: // execute <path> <stacksize>
+            if (tokens[3]!=0)          errorexit(1, "execute");
 
-            parsemytoken(buf, tokens, 4);
-            command = parsemycmd(buf);
+            path = tokens[1];
+            if (validate_path(path)==-1)   errorexit(2, "exec_path");
 
-            switch(command){
-            case NOCMD:
-                printf(1, "error : need command\n");
-                break;
-        // list
-            case MYLIST:
-                list();
-                break;
-        // kill <pid>
-            case MYKILL:
-                pid = atoi(tokens[1]);
-                if(validate_num(pid)) {
-                    printf(1, "kill\n");
-                    printf(1, "%d\n", pid);
-                    kill(pid);}
-                break;
-        // execute <path> <stacksize>
-            case MYEXEC:
-                path = tokens[1];
+            stacksize = validate_num(tokens[2]);
+            if (stacksize==-1)         errorexit(2, "exec_stacksize");
+
+            pid = fork();
+            if(pid==0) {
+                pid = fork();
                 char* argv[] = { path, 0 };
-                stacksize = atoi(tokens[2]);
-                printf(1, "%s\n", argv[0]);
-                printf(1, "%s\n", argv[1]);
-                if(validate_num(stacksize) && validate_path(path)) exec2(path, argv, stacksize);
-                break;
-        // memlim <pid> <limit>
-            case MYMEMLIM:
-                pid = atoi(tokens[1]);
-                limit = atoi(tokens[2]);
-                if(validate_num(pid) && validate_num(limit)) setmemorylimit(pid, limit);
-                break;
-        // exit
-            case MYEXIT:
+                if (pid==0)     exec2(path, argv, stacksize);
                 exit();
-                break;
-        // unknown
-            default:
-                printf(1, "error: unknown command");
             }
+            else if(pid>0) wait();
+            else           printf(1, " execute fork failed\n");
+            break;
+    
+        case MYMEMLIM: // memlim <pid> <limit>
+            if (tokens[3]!=0)   errorexit(1, "execute");
+
+            pid = validate_num(tokens[1]);
+            if (pid == -1)      errorexit(2, "memlim_pid");
+
+            limit = validate_num(tokens[2]);
+            if (limit == -1)    errorexit(2, "memlim_limit");
+
+            setmemorylimit(pid, limit);
+            break;
+    
+        case MYEXIT: // exit
+            if (tokens[1]!=0)   errorexit(1, "exit");
+            
+            exit();
+            break;
+        default: // unknown
+            printf(1, "error: unknown command\n");
+            break;
         }
     }
-
-    else if (!strcmp(argv[0], "my")){
-        printf(1, "me\n");
-    }
-
-    return 0;
+    exit();
 }
