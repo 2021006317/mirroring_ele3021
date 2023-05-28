@@ -41,7 +41,6 @@ int main(int argc, char *argv[])
   else if (pid == 0) {
     for (i = 0; i < NUM_THREAD; i++){
       thread_create(&t1[i], thread1, (void *)i);
-      printf(1, "thread_Create\n");
     }
       
     sleep(300);

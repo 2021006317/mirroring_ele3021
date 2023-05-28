@@ -148,7 +148,7 @@ setmemorylimit(int pid, int limit)
       return -1;
     }
     // error 3. 기존 할당받은 메모리보다 limit이 작은 경우
-    if (limit < p->memlim){ //! memlim 이 아니라 sz 로 봐야 하나?
+    if (limit < p->sz){
         cprintf("limit is smaller than assigned memory\n");
         return -1;
     }

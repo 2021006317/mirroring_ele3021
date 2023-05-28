@@ -61,7 +61,6 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
-  cprintf("allocate success\n");
   return p;
 }
 
@@ -73,6 +72,9 @@ int thread_create(thread_t *thread, void*(*start_routine)(void*), void* arg){
   if((thrd = allocate()) == 0){ // Allocate process.
       return -1;
   }
+  struct proc* parent = curproc->parent;
+
+  if(curproc->isThread == 1) curproc = parent;
 
   acquire(&ptable.lock);
   // thread를 위한 페이지 (stack, guard), 할당해주기
@@ -152,18 +154,21 @@ int sys_thread_create(void){
   return thread_create(thread, start_routine, arg);
 }
 
-void wake(struct proc* cur){
-  for(struct proc* p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->state == SLEEPING && p->chan == cur->parent){
+// The ptable lock must be held.
+void
+wake(void *chan)
+{
+  struct proc *p;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if(p->state == SLEEPING && p->chan == chan)
       p->state = RUNNABLE;
-    }
-  }
 }
 
 //! exit을 따라해봅시다.
 void thread_exit(void *retval){
   struct proc *curproc = myproc();
-  struct proc *child;
+  // struct proc *child;
   int fd;
 
   if(curproc->pid==1)
@@ -185,18 +190,9 @@ void thread_exit(void *retval){
   acquire(&ptable.lock);
 
   // wakeup1
-  wake(curproc);
+  wake(curproc->parent);
   
-  // Pass abandoned children to init.
-  for(child = ptable.proc; child < &ptable.proc[NPROC]; child++){
-    if(child->parent == curproc){
-      child->parent = initproc;
-      if(child->state == ZOMBIE)
-        wake(initproc);
-    }
-  }
   curproc->retval = retval;
-  cprintf("exit retval: %d\n", retval);
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();
@@ -233,7 +229,7 @@ void recovery(struct proc* thread){
 // 아무튼 목적은 자원회수하는 함수로, 얘를 부르는 건 메인스레드.
 int thread_join(thread_t thread, void **retval){
   struct proc *p;
-  struct proc *parent = myproc(); //curproc
+  struct proc *curproc = myproc(); //curproc
 
   acquire(&ptable.lock);
   for(;;){
@@ -243,9 +239,8 @@ int thread_join(thread_t thread, void **retval){
         continue;
       
       //* 내가 원하는 스레드인 경우
-      cprintf("pid %d, tid %d, parent pid: %d, cur pid: %d\n", p->pid, p->tid, p->parent->pid, parent->pid);
       // 잘못된 호출
-      if (p->parent != parent){
+      if (p->parent != curproc){
         release(&ptable.lock);          
         cprintf("error : this proc is not parent of the thread\n");
         return -1;
@@ -254,20 +249,19 @@ int thread_join(thread_t thread, void **retval){
       if(p->state == ZOMBIE){
         recovery(p);
         *retval = p->retval;
-        cprintf("p.retval: %d, *retval: %d\n", p->retval, *retval);
         release(&ptable.lock);
         return 0;
       }
     }
 
-    if(parent->killed){
+    if(curproc->killed){
       release(&ptable.lock);
       cprintf("error : parent has been already killed\n");
       return -1;
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    sleep(parent, &ptable.lock);  //DOC: wait-sleep
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
   }
 }
 
@@ -275,7 +269,7 @@ int sys_thread_join(void){
   thread_t thread;
   void** retval;
   int res1 = argint(0,(int*)&thread);
-  int res2 = argptr(0, (void*)&retval, sizeof(retval));
+  int res2 = argptr(1, (void*)&retval, sizeof(retval));
   
   if ((res1==-1)||(res2==-1)){
     cprintf("error : sys_thread_join\n");

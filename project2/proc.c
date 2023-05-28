@@ -165,6 +165,17 @@ growproc(int n)
 {
   uint sz;
   struct proc *curproc = myproc();
+  struct proc* parent = curproc->parent;
+  
+  acquire(&ptable.lock);
+
+  //* pmanager: memorylimit 확인하기
+  if ((curproc->memlim!=0) && (curproc->memlim < curproc->sz + n)){
+    cprintf("error : setmemory limited\n");
+    return -1;
+  }
+
+  if(curproc->isThread == 1) curproc = parent;
 
   sz = curproc->sz;
   if(n > 0){
@@ -174,6 +185,8 @@ growproc(int n)
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
   }
+  release(&ptable.lock);
+
   curproc->sz = sz;
   switchuvm(curproc);
   return 0;
@@ -196,7 +209,7 @@ fork(void)
   }
 
   // Copy process state from proc.
-  np->pgdir = copyuvm(curproc->pgdir, curproc->sz); //! 에러 발생?
+  np->pgdir = copyuvm(curproc->pgdir, curproc->sz);
   if((np->pgdir) == 0){
     kfree(np->kstack);
     np->kstack = 0;
@@ -207,8 +220,10 @@ fork(void)
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
-  np->isThread = 0; //* 메인스레드(프로세스)는 isThread=0
+  //* 메인스레드(프로세스)
+  np->isThread = 0; 
   np->tid = 0;
+  np->retval = 0;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -492,20 +507,25 @@ void kill_thread(struct proc* p){
   if (p->isThread==0){
     for (struct proc* child = ptable.proc; child<&ptable.proc[NPROC]; child++){
       if ((child->parent == p)&&(child->isThread==1)){
-        kill(child->pid);
+        child->killed=1;
         recovery(child);
       }
     }
   }
-  // 2. isThread==1 : 내가 아닌 형제(자기 부모의 다른 자식)스레드를 찾아 종료, 정리. 부모도 종료, 정리.
+  // 2. isThread==1 : 내가 아닌 형제(자기 부모의 다른 자식)스레드를 찾아 종료, 정리
   else if(p->isThread==1){
     for (struct proc* child = ptable.proc; child<&ptable.proc[NPROC]; child++){
       if((child->parent == p->parent)&&(child->isThread==1)&&(child->tid!=p->tid)){
-        kill(child->pid);
+        child->killed=1;
         recovery(child);
       }
     }
-    kill(p->parent->pid);
+    // 부모 종료, 정리
+    p->parent->killed=1;
+    // 내가 이제 메인스레드
+    p->isThread = 0;
+    p->parent = p->parent->parent;
+    
     recovery(p->parent);
   }
 }
@@ -521,9 +541,8 @@ kill(int pid)
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
-      
-      p->killed = 1;
       kill_thread(p);
+      p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
         p->state = RUNNABLE;
