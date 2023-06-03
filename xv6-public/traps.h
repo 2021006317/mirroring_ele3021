@@ -35,7 +35,4 @@
 #define IRQ_IDE         14
 #define IRQ_ERROR       19
 #define IRQ_SPURIOUS    31
- 
-//* scheduler lock/unlock
-#define IRQ_LOCK        129
-#define IRQ_UNLOCK      130
+

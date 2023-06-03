@@ -12,20 +12,16 @@
 struct gatedesc idt[256];
 extern uint vectors[];  // in vectors.S: array of 256 entry pointers
 struct spinlock tickslock;
-
-uint ticks; //* global tick
+uint ticks;
 
 void
 tvinit(void)
 {
   int i;
+
   for(i = 0; i < 256; i++)
     SETGATE(idt[i], 0, SEG_KCODE<<3, vectors[i], 0);
   SETGATE(idt[T_SYSCALL], 1, SEG_KCODE<<3, vectors[T_SYSCALL], DPL_USER);
-  SETGATE(idt[IRQ_UNLOCK], 1, SEG_KCODE<<3, vectors[IRQ_UNLOCK], DPL_USER);
-  SETGATE(idt[IRQ_LOCK], 1, SEG_KCODE<<3, vectors[IRQ_LOCK], DPL_USER);
-  
-
 
   initlock(&tickslock, "time");
 }
@@ -51,11 +47,10 @@ trap(struct trapframe *tf)
   }
 
   switch(tf->trapno){
-  case T_IRQ0 + IRQ_TIMER: //* timer interrupt 발생
+  case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
       acquire(&tickslock);
-      ticks++; //* global tick++
-
+      ticks++;
       wakeup(&ticks);
       release(&tickslock);
     }
@@ -82,14 +77,7 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
-  //* scheduler lock, unlock
-  case IRQ_LOCK:
-    schedulerLock(2021006317);
-    break;
-  case IRQ_UNLOCK:
-    schedulerUnlock(2021006317);
-    break;
-  
+
   //PAGEBREAK: 13
   default:
     if(myproc() == 0 || (tf->cs&3) == 0){
@@ -115,9 +103,8 @@ trap(struct trapframe *tf)
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
   if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER) //* timer interrupt 발생
-    {yield();}
-    
+     tf->trapno == T_IRQ0+IRQ_TIMER)
+    yield();
 
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)

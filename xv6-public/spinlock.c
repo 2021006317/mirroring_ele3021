@@ -9,8 +9,6 @@
 #include "proc.h"
 #include "spinlock.h"
 
-extern struct spinlock tickslock;
-
 void
 initlock(struct spinlock *lk, char *name)
 {
