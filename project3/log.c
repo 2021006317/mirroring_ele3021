@@ -121,6 +121,7 @@ recover_from_log(void)
   write_head(); // clear the log
 }
 
+//TODO
 // called at the start of each FS system call.
 void
 begin_op(void)
@@ -140,6 +141,7 @@ begin_op(void)
   }
 }
 
+//TODO
 // called at the end of each FS system call.
 // commits if this was the last outstanding operation.
 void
@@ -189,6 +191,7 @@ write_log(void)
   }
 }
 
+//TODO
 static void
 commit()
 {

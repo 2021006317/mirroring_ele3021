@@ -114,6 +114,7 @@ sys_fstat(void)
   return filestat(f, st);
 }
 
+//TODO
 // Create the path new as a link to the same inode as old.
 int
 sys_link(void)
@@ -282,6 +283,7 @@ create(char *path, short type, short major, short minor)
   return ip;
 }
 
+//TODO
 int
 sys_open(void)
 {

@@ -191,6 +191,7 @@ static struct inode* iget(uint dev, uint inum);
 // Allocate an inode on device dev.
 // Mark it as allocated by  giving it type type.
 // Returns an unlocked but allocated and referenced inode.
+//TODO 
 struct inode*
 ialloc(uint dev, short type)
 {
@@ -369,36 +370,112 @@ iunlockput(struct inode *ip)
 
 // Return the disk block address of the nth block in inode ip.
 // If there is no such block, bmap allocates one.
+//TODO
 static uint
 bmap(struct inode *ip, uint bn)
 {
-  uint addr, *a;
+  uint addr, *a, *b, *c;
   struct buf *bp;
 
-  if(bn < NDIRECT){
-    if((addr = ip->addrs[bn]) == 0)
+  if (bn < NDIRECT) {
+    // 직접 참조하는 데이터 블록
+    if ((addr = ip->addrs[bn]) == 0)
       ip->addrs[bn] = addr = balloc(ip->dev);
     return addr;
   }
   bn -= NDIRECT;
 
-  if(bn < NINDIRECT){
-    // Load indirect block, allocating if necessary.
-    if((addr = ip->addrs[NDIRECT]) == 0)
+  if (bn < NINDIRECT) {
+    // Single indirect 블록
+    if ((addr = ip->addrs[NDIRECT]) == 0)
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
+
+    // Single indirect 블록 읽기
     bp = bread(ip->dev, addr);
     a = (uint*)bp->data;
-    if((addr = a[bn]) == 0){
+
+    // 간접 참조하는 데이터 블록
+    if ((addr = a[bn]) == 0) {
       a[bn] = addr = balloc(ip->dev);
       log_write(bp);
     }
     brelse(bp);
     return addr;
   }
+  bn -= NINDIRECT;
 
+  if (bn < NINDIRECT * NINDIRECT) {
+    // Double indirect 블록
+    if ((addr = ip->addrs[NDIRECT + 1]) == 0)
+      ip->addrs[NDIRECT + 1] = addr = balloc(ip->dev);
+
+    // Double indirect 블록 읽기
+    bp = bread(ip->dev, addr);
+    b = (uint*)bp->data;
+
+    // Single indirect 블록
+    if ((addr = b[bn / NINDIRECT]) == 0) {
+      b[bn / NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    // Single indirect 블록 읽기
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    // 간접 참조하는 데이터 블록
+    if ((addr = a[(bn/NINDIRECT)%NINDIRECT]) == 0) {
+      a[bn] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
+  bn -= NINDIRECT * NINDIRECT;
+
+  if (bn < NINDIRECT*NINDIRECT*NINDIRECT){
+    if ((addr = ip->addrs[NDIRECT + 2]) == 0)
+      ip->addrs[NDIRECT + 2] = addr = balloc(ip->dev);
+
+    // Triple indirect 블록 읽기
+    bp = bread(ip->dev, addr);
+    c = (uint*)bp->data;
+
+    // Double indirect 블록
+    if ((addr = c[bn / (NINDIRECT*NINDIRECT)]) == 0) {
+      c[bn / (NINDIRECT*NINDIRECT)] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    // Double indirect 블록 읽기
+    bp = bread(ip->dev, addr);
+    b = (uint*)bp->data;
+
+    // Single indirect 블록
+    if ((addr = b[(bn / (NINDIRECT*NINDIRECT)) % NINDIRECT]) == 0) {
+      b[(bn / (NINDIRECT*NINDIRECT)) % NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    // Single indirect 블록 읽기
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    // 간접 참조하는 데이터 블록
+    if ((addr = a[bn%NINDIRECT]) == 0) {
+      a[bn] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
   panic("bmap: out of range");
 }
 
+//TODO
 // Truncate inode (discard contents).
 // Only called when the inode has no links
 // to it (no directory entries referring to it)
@@ -407,32 +484,86 @@ bmap(struct inode *ip, uint bn)
 static void
 itrunc(struct inode *ip)
 {
-  int i, j;
+  int i, j, k;
   struct buf *bp;
-  uint *a;
+  uint *a, *b, *c;
 
-  for(i = 0; i < NDIRECT; i++){
-    if(ip->addrs[i]){
+  // 직접 참조하는 블록들 해제
+  for (i = 0; i < NDIRECT; i++) {
+    if (ip->addrs[i]) {
       bfree(ip->dev, ip->addrs[i]);
       ip->addrs[i] = 0;
     }
   }
 
-  if(ip->addrs[NDIRECT]){
+  // Single indirect 블록 해제
+  if (ip->addrs[NDIRECT]) {
     bp = bread(ip->dev, ip->addrs[NDIRECT]);
     a = (uint*)bp->data;
-    for(j = 0; j < NINDIRECT; j++){
-      if(a[j])
+    for (j = 0; j < NINDIRECT; j++) {
+      if (a[j])
         bfree(ip->dev, a[j]);
     }
     brelse(bp);
+
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  // Double indirect 블록 해제
+  if (ip->addrs[NDIRECT + 1]) {
+    bp = bread(ip->dev, ip->addrs[NDIRECT + 1]);
+    b = (uint*)bp->data;
+    for (j = 0; j < NINDIRECT; j++) {
+      if (b[j]) {
+        bp = bread(ip->dev, b[j]);
+        a = (uint*)bp->data;
+        for (k = 0; k < NINDIRECT; k++) {
+          if (a[k])
+            bfree(ip->dev, a[k]);
+        }
+        brelse(bp);
+        bfree(ip->dev, b[j]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT + 1]);
+    ip->addrs[NDIRECT + 1] = 0;
+  }
+
+  // Triple indirect 블록 해제
+  if (ip->addrs[NDIRECT + 2]) {
+    bp = bread(ip->dev, ip->addrs[NDIRECT + 2]);
+    c = (uint*)bp->data;
+    for (i = 0; i < NINDIRECT; i++) {
+      if (c[i]) {
+        bp = bread(ip->dev, c[i]);
+        b = (uint*)bp->data;
+        for (j = 0; j < NINDIRECT; j++) {
+          if (b[j]) {
+            bp = bread(ip->dev, b[j]);
+            a = (uint*)bp->data;
+            for (k = 0; k < NINDIRECT; k++) {
+              if (a[k])
+                bfree(ip->dev, a[k]);
+            }
+            brelse(bp);
+            bfree(ip->dev, b[j]);
+          }
+        }
+        brelse(bp);
+        bfree(ip->dev, c[i]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT + 2]);
+    ip->addrs[NDIRECT + 2] = 0;
   }
 
   ip->size = 0;
   iupdate(ip);
 }
+
 
 // Copy stat information from inode.
 // Caller must hold ip->lock.
@@ -449,6 +580,7 @@ stati(struct inode *ip, struct stat *st)
 //PAGEBREAK!
 // Read data from inode.
 // Caller must hold ip->lock.
+//TODO
 int
 readi(struct inode *ip, char *dst, uint off, uint n)
 {
@@ -478,8 +610,9 @@ readi(struct inode *ip, char *dst, uint off, uint n)
 // PAGEBREAK!
 // Write data to inode.
 // Caller must hold ip->lock.
+//TODO
 int
-writei(struct inode *ip, char *src, uint off, uint n)
+writei(struct inode *ip, char *src, uint off, uint n )
 {
   uint tot, m;
   struct buf *bp;

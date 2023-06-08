@@ -1,0 +1,180 @@
+Notes:test pipe reader closes then write
+Notes:test two readers, two writers.
+Notes:  per-fd lock *just* protects count read-modify-write
+Notes:really should have bdwrite() for file content
+TRICKS:  - all reads in B see the effects of writes in A.
+TRICKS:  - all reads in A do *not* see the effects of writes in B.
+TRICKS:The x86 guarantees that writes in A will go out
+TRICKS:to memory before the write of lk->locked = 0 in 
+TRICKS:will observe CPU0's write of lk->locked = 0 only
+TRICKS:after observing the earlier writes by CPU0.
+TRICKS:effects of writes in A.
+TRICKS:moves reads down after writes, but the language in
+TRICKS:around the write to np->state. The acquire() prevents the
+bio.c:// * After changing buffer data, call bwrite to write it to disk.
+bio.c:bwrite(struct buf *b)
+bio.c:    panic("bwrite");
+bootmain.c:  // We'd write more to memory than asked, but it doesn't matter --
+cat.c:    if (write(1, buf, n) != n) {
+cat.c:      printf(1, "cat: write error\n");
+console.c:consolewrite(struct inode *ip, char *buf, int n)
+console.c:  devsw[CONSOLE].write = consolewrite;
+cuth:sub writefile($@){
+cuth:			writefile($file, @lines);
+cuth:	writefile($file, grep {!/CUT-H/} @lines);
+defs.h:void            bwrite(struct buf*);
+defs.h:int             filewrite(struct file*, char*, int n);
+defs.h:int             writei(struct inode*, char*, uint, uint);
+defs.h:void            log_write(struct buf*);
+defs.h:int             pipewrite(struct pipe*, char*, int);
+dot-bochsrc:# command.  If you do not write a config_interface line, Bochs will 
+dot-bochsrc:# If you do not write a display_library line, Bochs will choose a default for
+dot-bochsrc:# ROM images should not overwrite the rombios (located at
+dot-bochsrc:# log:  The file to write the sb16 emulator messages to.
+dot-bochsrc:#   vnet: ARP, ICMP-echo(ping), DHCP and read/write TFTP are simulated.
+dot-bochsrc:#         overwrite files.
+file.c:filewrite(struct file *f, char *addr, int n)
+file.c:    return pipewrite(f->pipe, addr, n);
+file.c:    // write a few blocks at a time to avoid exceeding
+file.c:    // and 2 blocks of slop for non-aligned writes.
+file.c:    // this really belongs lower down, since writei()
+file.c:      if ((r = writei(f->ip, addr + i, f->off, n1)) > 0)
+file.c:        panic("short filewrite");
+file.c:  panic("filewrite");
+file.h:  int (*write)(struct inode*, char*, int);
+forktest.c:  write(fd, s, strlen(s));
+fs.c:  log_write(bp);
+fs.c:        log_write(bp);
+fs.c:  log_write(bp);
+fs.c:// read or write that inode's ip->valid, ip->size, ip->type, &c.
+fs.c:      log_write(bp);   // mark it allocated on the disk
+fs.c:// that lives on disk, since i-node cache is write-through.
+fs.c:  log_write(bp);
+fs.c:      log_write(bp);
+fs.c:      log_write(bp);
+fs.c:      log_write(bp);
+fs.c:    log_write(bp);
+fs.c:    log_write(bp);
+fs.c:    log_write(bp);
+fs.c:writei(struct inode *ip, char *src, uint off, uint n )
+fs.c:    if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].write)
+fs.c:    return devsw[ip->major].write(ip, src, n);
+fs.c:    log_write(bp);
+fs.c:  if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+grep.c:        write(1, p, q+1 - p);
+ide.c:  int write_cmd = (sector_per_block == 1) ? IDE_CMD_WRITE : IDE_CMD_WRMUL;
+ide.c:    outb(0x1f7, write_cmd);
+ide.c:// If B_DIRTY is set, write buf to disk, clear B_DIRTY, set B_VALID.
+ioapic.c:// IO APIC MMIO structure: write reg, then read or write data.
+ioapic.c:ioapicwrite(int reg, uint data)
+ioapic.c:    ioapicwrite(REG_TABLE+2*i, INT_DISABLED | (T_IRQ0 + i));
+ioapic.c:    ioapicwrite(REG_TABLE+2*i+1, 0);
+ioapic.c:  ioapicwrite(REG_TABLE+2*irq, T_IRQ0 + irq);
+ioapic.c:  ioapicwrite(REG_TABLE+2*irq+1, cpunum << 24);
+lapic.c:  lapic[ID];  // wait for write to finish, by reading
+lapic.c:  // Clear error status register (requires back-to-back writes).
+log.c:// write an uncommitted system call's updates to disk.
+log.c:    bwrite(dbuf);  // write dst to disk
+log.c:write_head(void)
+log.c:  bwrite(buf);
+log.c:  write_head(); // clear the log
+log.c:write_log(void)
+log.c:    bwrite(to);  // write the log
+log.c:    write_log();     // Write modified blocks from cache to log
+log.c:    write_head();    // Write header to disk -- the real commit
+log.c:    install_trans(); // Now install writes to home locations
+log.c:    write_head();    // Erase the transaction from the log
+log.c:// commit()/write_log() will do the disk write.
+log.c:// log_write() replaces bwrite(); a typical use is:
+log.c://   log_write(bp)
+log.c:log_write(struct buf *b)
+log.c:    panic("log_write outside of trans");
+memide.c:// If B_DIRTY is set, write buf to disk, clear B_DIRTY, set B_VALID.
+mkfs.c:  if(write(fsfd, buf, BSIZE) != BSIZE){
+mkfs.c:    perror("write");
+mkfs.c:  printf("balloc: write bitmap block at sector %d\n", sb.bmapstart);
+param.h:#define MAXOPBLOCKS  10  // max # of blocks any FS op writes
+pipe.c:  uint nwrite;    // number of bytes written
+pipe.c:  int writeopen;  // write fd is still open
+pipe.c:  p->writeopen = 1;
+pipe.c:  p->nwrite = 0;
+pipe.c:    p->writeopen = 0;
+pipe.c:    wakeup(&p->nwrite);
+pipe.c:  if(p->readopen == 0 && p->writeopen == 0){
+pipe.c:pipewrite(struct pipe *p, char *addr, int n)
+pipe.c:    while(p->nwrite == p->nread + PIPESIZE){  //DOC: pipewrite-full
+pipe.c:      sleep(&p->nwrite, &p->lock);  //DOC: pipewrite-sleep
+pipe.c:    p->data[p->nwrite++ % PIPESIZE] = addr[i];
+pipe.c:  wakeup(&p->nread);  //DOC: pipewrite-wakeup1
+pipe.c:  while(p->nread == p->nwrite && p->writeopen){  //DOC: pipe-empty
+pipe.c:    if(p->nread == p->nwrite)
+pipe.c:  wakeup(&p->nwrite);  //DOC: piperead-wakeup
+printf.c:  write(fd, &c, 1);
+proc.c:  // writes to be visible, and the lock is also needed
+runoff:nicefont=LucidaSans-Typewriter83
+runoff.spec:#	bmap itrunc stati readi writei
+runoff.spec:#	fileinit filealloc filedup fileclose filestat fileread filewrite
+show1:runoff1 "$@" | pr.pl -h "xv6/$@" | mpage -m50t50b -o -bLetter -T -t -2 -FLucidaSans-Typewriter83 -L60 >x.ps; gv --swap x.ps
+stressfs.c:  printf(1, "write %d\n", i);
+stressfs.c:    write(fd, data, sizeof(data));
+syscall.c:extern int sys_write(void);
+syscall.c:[SYS_write]   sys_write,
+syscall.h:#define SYS_write  16
+sysfile.c:sys_write(void)
+sysfile.c:  return filewrite(f, p, n);
+sysfile.c:  if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+sysfile.c:    panic("unlink: writei");
+test_fs.c:  if (write(fd, buf, NUM_BYTES) < 0)
+test_fs.c:    failed("File write error\n");
+user.h:int write(int, const void*, int);
+usertests.c:// does the error path in open() for attempt to write a
+usertests.c:      printf(stdout, "open directory for write succeeded\n");
+usertests.c:writetest(void)
+usertests.c:    if(write(fd, "aaaaaaaaaa", 10) != 10){
+usertests.c:      printf(stdout, "error: write aa %d new file failed\n", i);
+usertests.c:    if(write(fd, "bbbbbbbbbb", 10) != 10){
+usertests.c:      printf(stdout, "error: write bb %d new file failed\n", i);
+usertests.c:  printf(stdout, "writes ok\n");
+usertests.c:writetest1(void)
+usertests.c:    if(write(fd, buf, 512) != 512){
+usertests.c:      printf(stdout, "error: write big file failed\n", i);
+usertests.c:// simple fork and pipe read/write
+usertests.c:      if(write(fds[1], buf, 1033) != 1033){
+usertests.c:    if(write(pfds[1], "x", 1) != 1)
+usertests.c:      printf(1, "preempt write error");
+usertests.c:// two processes write to the same file descriptor
+usertests.c:    if(write(fd, buf, sizeof(buf)) != sizeof(buf)){
+usertests.c:      printf(1, "fstests: write sharedfd failed\n");
+usertests.c:// four processes write different files at the same
+usertests.c:        if((n = write(fd, buf, 500)) != 500){
+usertests.c:          printf(1, "write failed %d\n", n);
+usertests.c:  write(fd, "hello", 5);
+usertests.c:  write(fd1, "yyy", 3);
+usertests.c:  if(write(fd, buf, 10) != 10){
+usertests.c:    printf(1, "unlinkread write failed\n");
+usertests.c:  if(write(fd, "hello", 5) != 5){
+usertests.c:    printf(1, "write lf1 failed\n");
+usertests.c:  write(fd, "ff", 2);
+usertests.c:  write(fd, "FF", 2);
+usertests.c:// test writes that are larger than the log.
+usertests.c:bigwrite(void)
+usertests.c:  printf(1, "bigwrite test\n");
+usertests.c:  unlink("bigwrite");
+usertests.c:    fd = open("bigwrite", O_CREATE | O_RDWR);
+usertests.c:      printf(1, "cannot create bigwrite\n");
+usertests.c:      int cc = write(fd, buf, sz);
+usertests.c:        printf(1, "write(%d) ret %d\n", sz, cc);
+usertests.c:    unlink("bigwrite");
+usertests.c:  printf(1, "bigwrite ok\n");
+usertests.c:    if(write(fd, buf, 600) != 600){
+usertests.c:      printf(1, "write bigfile failed\n");
+usertests.c:  if(write(fd, "x", 1) > 0){
+usertests.c:    printf(1, "write . succeeded!\n");
+usertests.c:      write(fds[1], "x", 1);
+usertests.c:// are larger than a page? or does it write
+usertests.c:      int cc = write(fd, buf, 512);
+usertests.c:  bigwrite();
+usertests.c:  writetest();
+usertests.c:  writetest1();
+usys.S:SYSCALL(write)
+x86.h:  // The + in "+m" denotes a read-modify-write operand.

@@ -1,5 +1,5 @@
 struct file {
-  enum { FD_NONE, FD_PIPE, FD_INODE } type;
+  enum { FD_NONE, FD_PIPE, FD_INODE, FD_SYMLINK } type;
   int ref; // reference count
   char readable;
   char writable;
@@ -8,7 +8,7 @@ struct file {
   uint off;
 };
 
-
+//TODO
 // in-memory copy of an inode
 struct inode {
   uint dev;           // Device number
@@ -22,7 +22,7 @@ struct inode {
   short minor;
   short nlink;
   uint size;
-  uint addrs[NDIRECT+1];
+  uint addrs[NDIRECT+1+1+1]; //* Data block addresses
 };
 
 // table mapping major device number to

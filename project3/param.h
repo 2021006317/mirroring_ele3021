@@ -10,5 +10,5 @@
 #define MAXOPBLOCKS  10  // max # of blocks any FS op writes
 #define LOGSIZE      (MAXOPBLOCKS*3)  // max data blocks in on-disk log
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
-#define FSSIZE       1000  // size of file system in blocks
+#define FSSIZE       2100000  // size of file system in blocks //TODO 이 값을 조절해서 최대 데이터 블록 개수의 제한을 없앤다. 2^21 = 2097152
 

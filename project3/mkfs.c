@@ -24,7 +24,7 @@ int nbitmap = FSSIZE/(BSIZE*8) + 1;
 int ninodeblocks = NINODES / IPB + 1;
 int nlog = LOGSIZE;
 int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
-int nblocks;  // Number of data blocks
+int nblocks;  // Number of data blocks : max 140
 
 int fsfd;
 struct superblock sb;
@@ -80,7 +80,7 @@ main(int argc, char *argv[])
     fprintf(stderr, "Usage: mkfs fs.img files...\n");
     exit(1);
   }
-
+  printf("sizeof dinode is %ld\n", sizeof(struct dinode));
   assert((BSIZE % sizeof(struct dinode)) == 0);
   assert((BSIZE % sizeof(struct dirent)) == 0);
 
@@ -92,7 +92,7 @@ main(int argc, char *argv[])
 
   // 1 fs block = 1 disk sector
   nmeta = 2 + nlog + ninodeblocks + nbitmap;
-  nblocks = FSSIZE - nmeta;
+  nblocks = FSSIZE - nmeta; //* 기존: max 140
 
   sb.size = xint(FSSIZE);
   sb.nblocks = xint(nblocks);
