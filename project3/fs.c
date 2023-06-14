@@ -580,6 +580,11 @@ readi(struct inode *ip, char *dst, uint off, uint n)
   uint tot, m;
   struct buf *bp;
 
+  if (ip->type == T_SYMLINK) {
+    //TODO 
+  }
+
+  // 기존
   if(ip->type == T_DEV){
     if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].read)
       return -1;

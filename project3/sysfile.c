@@ -114,7 +114,6 @@ sys_fstat(void)
   return filestat(f, st);
 }
 
-//TODO
 // Create the path new as a link to the same inode as old.
 int
 sys_link(void)
@@ -165,6 +164,8 @@ bad:
   return -1;
 }
 
+
+
 // Is the directory dp empty except for "." and ".." ?
 static int
 isdirempty(struct inode *dp)
@@ -181,6 +182,7 @@ isdirempty(struct inode *dp)
   return 1;
 }
 
+//TODO
 //PAGEBREAK!
 int
 sys_unlink(void)
@@ -254,6 +256,8 @@ create(char *path, short type, short major, short minor)
     ilock(ip);
     if(type == T_FILE && ip->type == T_FILE)
       return ip;
+    if (type == T_SYMLINK) //* symlink
+      return ip;
     iunlockput(ip);
     return 0;
   }
@@ -283,7 +287,36 @@ create(char *path, short type, short major, short minor)
   return ip;
 }
 
+
 //TODO
+// Create symlink
+int
+sys_symlink(void)
+{
+  char target[MAX_PATH], path[MAXARG];
+  if(argstr(0, (void*)&target) < 0 || argstr(1,(void*) &path) < 0){
+    return -1;
+  }
+
+  begin_op();
+  struct inode *ip = create((void*)path, T_SYMLINK, 0, 0);
+  if(ip == 0){
+    end_op();
+    return -1;
+  }
+
+  int len = strlen(target);
+  writei(ip, (char*)&len, 0, sizeof(int));
+  writei(ip, target, sizeof(int), len + 1);
+  iupdate(ip);
+  iunlockput(ip);
+
+  end_op();
+  return 0;
+
+
+}
+
 int
 sys_open(void)
 {
@@ -303,7 +336,8 @@ sys_open(void)
       end_op();
       return -1;
     }
-  } else {
+  }
+  else {
     if((ip = namei(path)) == 0){
       end_op();
       return -1;
@@ -313,6 +347,33 @@ sys_open(void)
       iunlockput(ip);
       end_op();
       return -1;
+    }
+
+  //* check for symlink
+    if ((ip->type == T_SYMLINK) && (omode & O_NOFOLLOW)) {
+      int cnt = 0;
+      while(ip->type == T_SYMLINK && cnt < 5) {
+        int len = 0;
+        readi(ip, (char*)&len, 0, sizeof(int));
+
+        if (len>MAX_PATH){
+          panic("open: symlink path too long");
+        }
+
+        readi(ip, path, sizeof(int), len+1);
+        iunlockput(ip);
+        if((ip = namei(path)) == 0){
+          end_op();
+          return -1;
+        }
+        ilock(ip);
+        cnt++;
+      }
+      if(cnt>=5){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
     }
   }
 
@@ -405,6 +466,38 @@ sys_exec(void)
   if(argstr(0, &path) < 0 || argint(1, (int*)&uargv) < 0){
     return -1;
   }
+
+
+  //* if symlink
+  struct inode *ip;
+  if((ip = namei(path)) == 0){
+    return -1;
+  }
+
+  if(ip->type == T_SYMLINK){
+    int cnt = 0;
+    while(ip->type == T_SYMLINK && cnt < 5) {
+      int len = 0;
+      readi(ip, (char*)&len, 0, sizeof(int));
+
+      if (len>MAX_PATH){
+        panic("exec: symlink path too long");
+      }
+
+      readi(ip, path, sizeof(int), len+1);
+      iunlockput(ip);
+      if((ip = namei(path)) == 0){
+        return -1;
+      }
+      ilock(ip);
+      cnt++;
+    }
+    if(cnt>=5){
+      iunlockput(ip);
+      return -1;
+    }
+  }
+  
   memset(argv, 0, sizeof(argv));
   for(i=0;; i++){
     if(i >= NELEM(argv))

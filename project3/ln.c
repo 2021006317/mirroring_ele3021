@@ -12,7 +12,12 @@ main(int argc, char *argv[])
     printf(2, "Usage: ln -op old new\n");
     exit();
   }
-  if(link(argv[2], argv[3]) < 0)
+  if(strcmp(argv[1], "-s")==0){
+    if(symlink(argv[2], argv[3]) < 0)
+      printf(2, "symlink %s %s: failed\n", argv[2], argv[3]);
+    exit();
+  }
+  else if(link(argv[1], argv[2]) < 0)
     printf(2, "link %s %s: failed\n", argv[2], argv[3]);
   exit();
 }

@@ -8,7 +8,6 @@ struct file {
   uint off;
 };
 
-//TODO
 // in-memory copy of an inode
 struct inode {
   uint dev;           // Device number
